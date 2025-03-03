@@ -2,13 +2,19 @@
 
 {
   # https://devenv.sh/basics/
-  env.GREET = "devenv";
+  #env.GREET = "devenv";
 
   # https://devenv.sh/packages/
-  packages = [ pkgs.git ];
+  packages = [
+    pkgs.git
+    pkgs.python312Packages.pyqt6
+  ];
 
   # https://devenv.sh/languages/
-  # languages.rust.enable = true;
+  languages.python = {
+    enable = true;
+    package = pkgs.python312Full;
+  };
 
   # https://devenv.sh/processes/
   # processes.cargo-watch.exec = "cargo-watch";
@@ -17,13 +23,12 @@
   # services.postgres.enable = true;
 
   # https://devenv.sh/scripts/
-  scripts.hello.exec = ''
-    echo hello from $GREET
-  '';
+  #scripts.hello.exec = ''
+  #  echo hello from $GREET
+  #'';
 
   enterShell = ''
-    hello
-    git --version
+    git fetch
   '';
 
   # https://devenv.sh/tasks/
@@ -34,12 +39,16 @@
 
   # https://devenv.sh/tests/
   enterTest = ''
-    echo "Running tests"
-    git --version | grep --color=auto "${pkgs.git.version}"
+    echo "No tests yet"
   '';
 
   # https://devenv.sh/git-hooks/
   # git-hooks.hooks.shellcheck.enable = true;
+  git-hooks.hooks = {
+    black = {
+      enable = true;
+    };
+  };
 
   # See full reference at https://devenv.sh/reference/options/
 }
