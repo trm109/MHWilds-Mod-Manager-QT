@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QHBoxLayout,
     QCheckBox,
+    QMessageBox,
 )
 import os
 import zipfile
@@ -26,6 +27,7 @@ class ModsTab(QWidget):
         refreshButton = QPushButton("Refresh")
         refreshButton.clicked.connect(self.refreshMods)
         self.refreshMods()  # Refresh mods on startup
+        # TODO make refresh also re-import mods
 
         self.layout.addRow(QLabel("Mods"))
         self.layout.addRow(self.modList)
@@ -40,7 +42,7 @@ class ModsTab(QWidget):
             item = QListWidgetItem()
             item.setSizeHint(self.modList.sizeHint())
             self.modList.modList.addItem(item)
-            self.modList.modList.setItemWidget(item, ModWidget(mod.filename))
+            self.modList.modList.setItemWidget(item, ModWidget(mod))
 
 
 class ModList(QWidget):
@@ -57,20 +59,36 @@ class ModList(QWidget):
 # Widget for each mod in the mod list
 # Takes in the name of the mod
 class ModWidget(QWidget):
-    def __init__(self, filename):
+    def __init__(self, mod):
         super().__init__()
         self.layout = QHBoxLayout(self)
+        self.mod = mod
+        self.name = mod.modName
+        self.version = mod.version
+        self.description = mod.description
+        self.author = mod.author
 
-        self.filename = filename
-
-        # name = filename without the .zip extension
-        label = QLabel(filename.replace(".zip", ""))
+        # name
+        label = QLabel(self.name)
+        self.layout.addWidget(label)
+        # version
+        label = QLabel(self.version)
+        self.layout.addWidget(label)
+        # description
+        label = QLabel(self.description)
+        self.layout.addWidget(label)
+        # author
+        label = QLabel(self.author)
         self.layout.addWidget(label)
 
         # CheckBox to disable or enable the mod
         self.enableBox = QCheckBox("Enable")
+        self.enableBox.setChecked(self.mod.enabled)
         self.enableBox.stateChanged.connect(self.handleToggle)
         self.layout.addWidget(self.enableBox)
+
+        # Make all the widgets the same width
+        self.layout.setStretchFactor(label, 1)
 
         self.setLayout(self.layout)
 
@@ -79,7 +97,19 @@ class ModWidget(QWidget):
         print(state)
         if state == 0:
             print("uninstalling")
-            uninstallMod(self.filename)
+            self.mod.uninstall()
         else:
             print("installing")
-            installMod(self.filename)
+            self.mod.install()
+            specialCase = self.mod.determineSpecialCase()
+            if specialCase is not None:
+                if specialCase.startswith("ERROR"):
+                    dialog = QMessageBox()
+                    dialog.setWindowTitle("Error")
+                    dialog.setText(
+                        "Error while installing "
+                        + self.mod.modName
+                        + "\n"
+                        + specialCase
+                    )
+                    dialog.exec()

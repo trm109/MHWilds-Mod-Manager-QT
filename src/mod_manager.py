@@ -6,161 +6,335 @@ class ModManager:
     def __init__(self, gameDir, modsDir):
         self.gameDir = gameDir  # Path to the game directory
         self.modsDir = modsDir  # Path to the mods directory
-        self.config = self.modsDir + "/config.json"
+        self.config = os.path.expanduser(modsDir + "/config.json")
         self.mods = []
+        # get all the mods
         self.getMods()
+        # Debug
+        print("ModManager initialized:")
+        print("\tGame Directory: " + self.gameDir)
+        print("\tMods Directory: " + self.modsDir)
+        print("\tConfig File: " + self.config)
+        print("\tMods:")
+        for mod in self.mods:
+            print("\t\t" + mod.modName)
+            print("\t\t\tVersion: " + mod.version)
+            print("\t\t\tAuthor: " + mod.author)
+            print("\t\t\tDescription: " + mod.description)
+            print("\t\t\tMod Type: " + mod.modType)
+        return
 
     def getMods(self):  # -> None
-        # TODO
-        # Get all the mods in the mods folder
+        # Get all the mod archives in the MHWildsMods folder
         mods = []
+
+        # Get all the mod archives in the MHWildsMods folder
         for file in os.listdir(os.path.expanduser("~/Documents/MHWildsMods")):
             if file.endswith(".zip"):  # Only support zip files for now
-                mods.append(Mod(self.gameDir, file))
-        for mod in mods:
-            print(mod.filename)  # Debug
+                # Instantiate a Mod object for each mod
+                mods.append(Mod(self, file))
+
+        # Set the mods list
         self.mods = mods
         return
 
 
 class Mod:
-    def __init__(self, gameDir, path):
-        self.path = path
-        self.filename = path.split("/")[-1]
-        self.modName = (
-            ""  # name of the mod, will be overwritten if the mod has a `modinfo.ini`
-        )
-        self.extension = self.filename.split(".")[-1]  # extension of the mod
+    def __init__(self, parent, archivePath):
+        self.parent = parent
+        self.archivePath = archivePath
+        self.modName = ""
         self.files = []
+        self.folders = []
         self.version = ""  # version of the mod
         self.author = ""  # author of the mod
         self.description = ""  # description of the mod
         self.modType = ""  # packaged or unpackaged mod
-        self.parseModInfo()
-        self.enabled = self.isInstalled(gameDir)
+        # set the mod info
+        self.setModInfo()
+        # unpack the mod archive based on modType
+        self.importMod()
+        # check if the mod is enabled
+        self.enabled = self.isInstalled()
 
-    def parseModInfo(self):  # -> None
+    def setModInfo(self):  # -> None
         # TODO
-        self.files = self.getFiles()
-        # Check if the mod has a `modinfo.ini` file
-        modType = self.determineModType()
-        print(modType)
-        match modType:
-            case "packaged":
-                # reference the modinfo.ini file
-                return
-            case "top-level-packaged":
-                # reference the modinfo.ini file
-                return
-            case "raw_dll":
-                # use the filename as the mod name
-                return
-            case "native":
-                # use the filename as the mod name
-                return
-            case "unknown":
-                # use the filename as the mod name
-                return
-            case _:
-                # error
-                raise ValueError("Invalid mod type")
+        # set self.files
+        self.setFiles()
+        # set self.modType
+        self.setModType()
+        # Parse modDir/self.modName/modinfo.ini
+        self.parseModInfo()
 
         return
 
-    def determineModType(self):  # -> str
+    def parseModInfo(self):  # -> None
         # TODO
-        if self.files == []:
-            print("No files found, is this an empty mod?")
-            return "null"
+        zip = zipfile.ZipFile(
+            os.path.expanduser(self.parent.modsDir + "/" + self.archivePath), "r"
+        )
+        # check if the mod has a modinfo.ini file
+        if not any([file.endswith("modinfo.ini") for file in self.files]):
+            self.modName = self.archivePath.split(".")[0]
+            self.version = "n/a"
+            self.author = "n/a"
+            self.description = "n/a"
+            return
+        # Parse the modinfo.ini file
+        for file in self.files:
+            if file.endswith("modinfo.ini"):
+                with zip.open(file) as f:
+                    for line in f:
+                        line = line.decode("utf-8").strip()
+                        if line.startswith("name="):
+                            self.modName = line.split("=")[1]
+                        elif line.startswith("version="):
+                            self.version = line.split("=")[1]
+                        elif line.startswith("author="):
+                            self.author = line.split("=")[1]
+                        elif line.startswith("description="):
+                            self.description = line.split("=")[1]
+                return
+
+    def importMod(self):  # -> None
+        # TODO
+        zip = zipfile.ZipFile(
+            os.path.expanduser(self.parent.modsDir + "/" + self.archivePath), "r"
+        )
+        # Unzip/Untar/Unrar's the folder based on the mod type
+        match self.modType:
+            case "packaged":
+                # Extract the archive to modDir/self.modName, minus the top level archive folder
+                # for example; the archive path DynamicCamera/* -> modDir/self.modName/*
+                toplevelFolder = [
+                    file for file in zip.namelist() if file.count("/") >= 1
+                ][0].split("/")[0]
+                zip.extractall(os.path.expanduser(self.parent.modsDir + "/imported"))
+                # move the folder to modDir/self.modName
+                os.rename(
+                    os.path.expanduser(
+                        self.parent.modsDir + "/imported/" + toplevelFolder
+                    ),
+                    os.path.expanduser(
+                        self.parent.modsDir + "/imported/" + self.modName
+                    ),
+                )
+                return
+            case "top-level-packaged":
+                # Easy, just extract files to modDir/self.modName
+                # for example; the archive path DynamicCamera -> modDir/self.modName
+                zip.extractall(
+                    os.path.expanduser(
+                        self.parent.modsDir + "/imported/" + self.modName
+                    )
+                )
+                return
+            case "raw_dll":
+                # Extract files to modDir/self.modName
+                zip.extractall(
+                    os.path.expanduser(
+                        self.parent.modsDir + "/imported/" + self.modName
+                    )
+                )
+                # TODO generate a modinfo.ini file
+                return
+            case "native":
+                # Extract files to modDir/self.modName
+                zip.extractall(
+                    os.path.expanduser(
+                        self.parent.modsDir + "/imported/" + self.modName
+                    )
+                )
+                # TODO generate a modinfo.ini file
+                return
+            case "unknown":
+                # Extract files to modDir/self.modName
+                zip.extractall(
+                    os.path.expanduser(
+                        self.parent.modsDir + "/imported/" + self.modName
+                    )
+                )
+                # generate a modinfo.ini file
+                return
+            case _:
+                raise ValueError("Invalid mod type")
+        return
+
+    def setModType(self):  # -> None
         # Types are: packaged, top-level-packaged, raw_dll, native, and unknown
-        print("parsing files:")
-        # for file in self.files:
-        # print(file) # Debug
+        if self.files == []:
+            self.modType = "null"
+            return
 
         # check if the mod has a modinfo.ini file
         if any([file.endswith("modinfo.ini") for file in self.files]):
-            print("Found modinfo.ini file")
             # Check if the `modinfo.ini` file is at the top level
             if [file for file in self.files if file.endswith("modinfo.ini")][0].count(
                 "/"
             ) == 0:
-                print("Top-level modinfo.ini file: top-level-packaged")
-                return "top-level-packaged"
-            print("No top-level modinfo.ini file: packaged")
-            return "packaged"
-
-        # check for dll files that are at top level
-        for file in (file for file in self.files if file.endswith(".dll")):
-            print("Found DLL file")
-            if file.count("/") == 0:
-                print("Top-level DLL file: raw_dll")
-                return "raw_dll"
+                self.modType = "top-level-packaged"
+                return
+            else:
+                self.modType = "packaged"
+                return
 
         # check for top-level `reframework` folder
-        if any([file.startswith("reframework") for file in self.files]):
-            print("Found top-level reframework folder: native")
-            return "native"
+        if "reframework/" in self.folders:
+            self.modType = "native"
+            return
 
-        print("Unknown mod type")
-        return "unknown"
+        # check for dll files that are at top level
+        # exists(file) where file.endswith(".dll") and file.count("/") == 0
+        for file in (file for file in self.files if file.endswith(".dll")):
+            if file.count("/") == 0:
+                self.modType = "raw_dll"
+                return
 
-    def determineSpecialCase(files):  # -> str
+        self.modType = "unknown"
+        return
+
+    def determineSpecialCase(self):  # -> None
         # For specific mods. Hard-coded support
         # REFramework
         # CatLib
         # MHWilds Overlay
         # reframework d2d
-        return ""
+        if len(self.files) == 1 and self.files[0] == "reframework-d2d.dll":
+            # this is a older version of the reframework-d2d mod, warn user.
+            # TODO
+            return (
+                "ERROR:"
+                + "\n"
+                + "This is an older version of the REFramework D2D mod. Please download the official version from: https://www.nexusmods.com/monsterhunterrise/mods/134?tab=files"
+                + "\n\n"
+                + "This older version is NOT supported by MHWilds-Mod-Manager-QT and will not install correctly"
+            )
+        return
 
     # Get all the VALID files in an archive. Ignore things like Cover.png, and fix bad paths like _CatLib/reframework
-    def getFiles(self):  # -> files
+    def setFiles(self):  # -> files
         # TODO
         zip = zipfile.ZipFile(
-            os.path.expanduser("~/Documents/MHWildsMods/" + self.path), "r"
+            os.path.expanduser(self.parent.modsDir + "/" + self.archivePath), "r"
         )
         # filter out files ending in /
         files = [file for file in zip.namelist() if not file.endswith("/")]
         folders = [file for file in zip.namelist() if file.endswith("/")]
-        # print(files)
-        # for file in zip.namelist():
-        #    if file.endswith(".esp") or file.endswith(".esm") or file.endswith(".bsa") or file.endswith(".dll") or file.endswith(".ini"):
-        #        files.append(File(self.path, file))
-        print(files)
-        print(folders)
-        return files
 
-    # Determine if the mod is already installed
-    def isInstalled(self, gameDir):
-        # for file in self.files:
-        # Check if file is symlinked
-        print("Mod.isInstalled() called")
-        return True
+        if files == []:
+            raise ValueError("No files found in the archive")
 
-    def install(self, gameDir):
-        match self.modType:
-            case "packaged":
-                # Enter the top level folder (which is typically the name of the mod) and extract files to gameDir/
-                return
-            case "top-level-packaged":
-                # Easy, just extract files to gameDir/
-                return
-            case "raw_dll":
-                # Extract files to gameDir/
-                return
-            case "native":
-                # Extract files to gameDir/
-                return
-            case "unknown":
-                # Extract files to gameDir/
-                return
-            case _:
-                raise ValueError("Invalid mod type")
+        # print("Files:")
+        # for file in files:
+        #    print("\t" + file)
+        # print("Folders:")
+        # for folder in folders:
+        #    print("\t" + folder)
+        # raise ValueError("DEBUG")
 
+        self.files = files
+        self.folders = folders
         return
 
-    def uninstall(self, gameDir):
+    # Determine if the mod is already installed
+    def isInstalled(self):
+        print("Checking if mod is installed: " + self.modName)
+        # Note:
+        # We are assuming that the mod is installed if ALL the files are present
+        # If ANY of the files are missing, we will treat the mod as not installed
+        # previous, non-symlinked files will be treated as not installed
         for file in self.files:
-            file.uninstall(gameDir)
+            if os.path.exists(os.path.expanduser(self.parent.gameDir + "/" + file)):
+                # check if its a symlink
+                if os.path.islink(os.path.expanduser(self.parent.gameDir + "/" + file)):
+                    # treat as installed
+                    continue
+                else:
+                    # treat as not installed, but will replace original file (handled by install())
+                    print(
+                        "File exists but is not a symlink: "
+                        + self.parent.gameDir
+                        + "/"
+                        + file
+                    )
+                    print("Therefor, the mod is not installed")
+                    return False
+            else:
+                # treat as not installed
+                print("File does not exist: " + self.parent.gameDir + "/" + file)
+                print("Therefor, the mod is not installed")
+                return False
+        print("All files are present, mod is installed")
+        return True
+
+    def install(self):
+        # TODO ignore certain file types, like `modinfo.ini`, `*.png`
+        print("Installing mod: " + self.modName)
+
+        for folder in self.folders:
+            if self.modType == "packaged":
+                # trim the first folder
+                folder = folder.split("/", 1)[1]
+                print("Trimmed folder: " + folder)
+            # For packaged mods, the top level folder is the mod name, but this is corrected in setModType()
+            folderPath = os.path.expanduser(self.parent.gameDir + "/" + folder)
+            if not os.path.exists(folderPath):
+                os.makedirs(folderPath)
+            print("Created folder: " + folderPath)
+
+        for file in self.files:
+            if self.modType == "packaged":
+                file = file.split("/", 1)[1]
+                print("Trimmed file: " + file)
+            symlinkFrom = os.path.expanduser(
+                self.parent.modsDir + "/imported/" + self.modName + "/" + file
+            )
+            if os.path.isdir(symlinkFrom):
+                # TODO handle this better
+                print("ERROR: File is a directory, not a file: " + symlinkFrom)
+                continue
+
+            symlinkTo = os.path.expanduser(self.parent.gameDir + "/" + file)
+            # Check if file already exists
+            if os.path.exists(symlinkTo):
+                # check if its a directory
+                if os.path.isdir(symlinkTo):
+                    # remove the directory
+                    print("ERROR: File is a directory, not a file: " + symlinkTo)
+                    raise ValueError("File is a directory, not a file: " + symlinkTo)
+                # already exists, check if its a symlink
+                if os.path.islink(symlinkTo):
+                    # remove the symlink
+                    os.unlink(symlinkTo)
+                    print("Removed existing symlink: " + symlinkTo)
+                else:
+                    # move the file to a backup location
+                    os.rename(symlinkTo, symlinkTo + ".bak")
+                    print("Moved existing file to: " + symlinkTo + ".bak")
+            ## Checkif file is a symlink (then we know its two mods colliding)
+            os.symlink(symlinkFrom, symlinkTo)
+            print("Created symlink: " + symlinkFrom + " -> " + symlinkTo)
+        print("Finished installing mod: " + self.modName)
+        return
+
+    def uninstall(self):
+        # TODO Handle .bak files
+        print("Uninstalling mod: " + self.modName)
+        # Does not touch folders, only symlinked files
+        for file in self.files:
+            if self.modType == "packaged":
+                file = file.split("/", 1)[1]
+            symlinkTo = os.path.expanduser(self.parent.gameDir + "/" + file)
+            if os.path.islink(symlinkTo):
+                os.unlink(symlinkTo)
+                # Check for .bak files
+                if os.path.exists(symlinkTo + ".bak"):
+                    os.rename(symlinkTo + ".bak", symlinkTo)
+                    print("Restored backup file: " + symlinkTo)
+                print("Removed symlink: " + symlinkTo)
+            else:
+                print("File is not a symlink: " + symlinkTo)
+        print("Finished uninstalling mod: " + self.modName)
         return
 
 
