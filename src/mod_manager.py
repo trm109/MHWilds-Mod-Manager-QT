@@ -7,16 +7,20 @@ class ModManager:
         self.gameDir = gameDir  # Path to the game directory
         self.modsDir = modsDir  # Path to the mods directory
         self.config = self.modsDir + "/config.json"
-        self.mods = self.getMods()
+        self.mods = []
+        self.getMods()
 
-    def getMods(self):  # -> List[Mod]
+    def getMods(self):  # -> None
         # TODO
         # Get all the mods in the mods folder
         mods = []
         for file in os.listdir(os.path.expanduser("~/Documents/MHWildsMods")):
             if file.endswith(".zip"):  # Only support zip files for now
                 mods.append(Mod(self.gameDir, file))
-        return mods
+        for mod in mods:
+            print(mod.filename)  # Debug
+        self.mods = mods
+        return
 
 
 class Mod:
@@ -35,55 +39,123 @@ class Mod:
         self.parseModInfo()
         self.enabled = self.isInstalled(gameDir)
 
-    def parseModInfo(self):
+    def parseModInfo(self):  # -> None
         # TODO
-        files = self.getFiles()
+        self.files = self.getFiles()
         # Check if the mod has a `modinfo.ini` file
-        if any([file.endswith("modinfo.ini") for file in files]):
-            # This is a packaged mod
-            prefix = ""
-            # for the */modinfo.ini file, get its folder name
-            for file in files:
-                if file.endswith("modinfo.ini"):
-                    prefix = file.split("/")[0]
-                    break
-
-            if prefix == "":
-                # This is a bad mod, handle
-                print("Bad mod: " + self.filename)
+        modType = self.determineModType()
+        print(modType)
+        match modType:
+            case "packaged":
+                # reference the modinfo.ini file
                 return
-            # Parse the `modinfo.ini` file to get the version, author, and description
-            # TODO grab the contents of modinfo.ini and populate self.version, self.author, and self.description
+            case "top-level-packaged":
+                # reference the modinfo.ini file
+                return
+            case "raw_dll":
+                # use the filename as the mod name
+                return
+            case "native":
+                # use the filename as the mod name
+                return
+            case "unknown":
+                # use the filename as the mod name
+                return
+            case _:
+                # error
+                raise ValueError("Invalid mod type")
 
-            pass
-        # If it does, parse the file to get the version, author, and description
-        # If it doesn't, set the version, author, and description to empty strings
         return
 
+    def determineModType(self):  # -> str
+        # TODO
+        if self.files == []:
+            print("No files found, is this an empty mod?")
+            return "null"
+        # Types are: packaged, top-level-packaged, raw_dll, native, and unknown
+        print("parsing files:")
+        # for file in self.files:
+        # print(file) # Debug
+
+        # check if the mod has a modinfo.ini file
+        if any([file.endswith("modinfo.ini") for file in self.files]):
+            print("Found modinfo.ini file")
+            # Check if the `modinfo.ini` file is at the top level
+            if [file for file in self.files if file.endswith("modinfo.ini")][0].count(
+                "/"
+            ) == 0:
+                print("Top-level modinfo.ini file: top-level-packaged")
+                return "top-level-packaged"
+            print("No top-level modinfo.ini file: packaged")
+            return "packaged"
+
+        # check for dll files that are at top level
+        for file in (file for file in self.files if file.endswith(".dll")):
+            print("Found DLL file")
+            if file.count("/") == 0:
+                print("Top-level DLL file: raw_dll")
+                return "raw_dll"
+
+        # check for top-level `reframework` folder
+        if any([file.startswith("reframework") for file in self.files]):
+            print("Found top-level reframework folder: native")
+            return "native"
+
+        print("Unknown mod type")
+        return "unknown"
+
+    def determineSpecialCase(files):  # -> str
+        # For specific mods. Hard-coded support
+        # REFramework
+        # CatLib
+        # MHWilds Overlay
+        # reframework d2d
+        return ""
+
     # Get all the VALID files in an archive. Ignore things like Cover.png, and fix bad paths like _CatLib/reframework
-    def getFiles(self):  # -> List[File]
+    def getFiles(self):  # -> files
         # TODO
         zip = zipfile.ZipFile(
             os.path.expanduser("~/Documents/MHWildsMods/" + self.path), "r"
         )
         # filter out files ending in /
-        # files = [ file for file in zip.namelist() if not file.endswith("/")]
+        files = [file for file in zip.namelist() if not file.endswith("/")]
+        folders = [file for file in zip.namelist() if file.endswith("/")]
         # print(files)
         # for file in zip.namelist():
         #    if file.endswith(".esp") or file.endswith(".esm") or file.endswith(".bsa") or file.endswith(".dll") or file.endswith(".ini"):
         #        files.append(File(self.path, file))
+        print(files)
+        print(folders)
         return files
 
     # Determine if the mod is already installed
     def isInstalled(self, gameDir):
-        for file in self.files:
-            if not file.isInstalled(gameDir):
-                return False
+        # for file in self.files:
+        # Check if file is symlinked
+        print("Mod.isInstalled() called")
         return True
 
     def install(self, gameDir):
-        for file in self.files:
-            file.install(gameDir)
+        match self.modType:
+            case "packaged":
+                # Enter the top level folder (which is typically the name of the mod) and extract files to gameDir/
+                return
+            case "top-level-packaged":
+                # Easy, just extract files to gameDir/
+                return
+            case "raw_dll":
+                # Extract files to gameDir/
+                return
+            case "native":
+                # Extract files to gameDir/
+                return
+            case "unknown":
+                # Extract files to gameDir/
+                return
+            case _:
+                raise ValueError("Invalid mod type")
+
         return
 
     def uninstall(self, gameDir):

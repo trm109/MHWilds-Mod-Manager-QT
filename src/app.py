@@ -9,6 +9,20 @@ from mod_manager import ModManager
 
 app = QApplication(sys.argv)
 
+print("Checking for required files")
+if not os.path.exists(os.path.expanduser("~/Documents/MHWildsMods")):
+    os.makedirs(os.path.expanduser("~/Documents/MHWildsMods"))
+    print("Directory created")
+else:
+    print("Directory already exists")
+
+if not os.path.exists(os.path.expanduser("~/Documents/MHWildsMods/config.json")):
+    with open(os.path.expanduser("~/Documents/MHWildsMods/config.json"), "w") as f:
+        f.write('{"gamedirectory": "", "modsdirectory": "", "mods": []}')
+    print("Config file created")
+else:
+    print("Config file already exists")
+
 modManager = ModManager(
     "/home/saik/.steam/steam/steamapps/common/MonsterHunterWilds",
     "/home/saik/Documents/MHWildsMods",
@@ -21,10 +35,6 @@ window.show()
 # Required files:
 # - Documents/MHWildsMods/
 # - Documents/MHWildsMods/config.json
-os.makedirs(os.path.expanduser("~/Documents/MHWildsMods"), exist_ok=True)
-if not os.path.exists(os.path.expanduser("~/Documents/MHWildsMods/config.json")):
-    with open(os.path.expanduser("~/Documents/MHWildsMods/config.json"), "w") as f:
-        f.write('{"gamedirectory": "", "modsdirectory": "", "mods": []}')
 
 
 app.exec()

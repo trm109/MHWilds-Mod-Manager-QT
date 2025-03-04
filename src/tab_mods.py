@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 )
 import os
 import zipfile
-from mod_manager import ModManager, Mod, File
+from mod_manager import ModManager, Mod
 
 
 class ModsTab(QWidget):
@@ -25,6 +25,7 @@ class ModsTab(QWidget):
 
         refreshButton = QPushButton("Refresh")
         refreshButton.clicked.connect(self.refreshMods)
+        self.refreshMods()  # Refresh mods on startup
 
         self.layout.addRow(QLabel("Mods"))
         self.layout.addRow(self.modList)
